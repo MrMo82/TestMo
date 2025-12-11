@@ -1,0 +1,5 @@
+{
+  "name": "CMP Schweiz Test Manager",
+  "description": "AI-powered Test Case Management System for CMP Schweiz. Generates, manages, and executes test cases with a focus on usability for business testers.",
+  "requestFramePermissions": []
+}
