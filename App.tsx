@@ -226,7 +226,7 @@ function AppContent() {
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full print-container">
         {isProjectsRoute ? <ProjectsPage /> : isProjectOverviewRoute ? <ProjectOverviewPage /> : isSourcesRoute ? <SourcesPage /> : isPlannedRoute ? <PlannedRoute title="Dieser Projektbereich ist vorgemerkt" /> : view === 'dashboard' && <Dashboard cases={cases} />}
         {view === 'create' && <TestCaseGenerator onSave={handleSaveCase} onCancel={() => { goTo('dashboard'); setEditingCase(null); }} projectSettings={projectSettings} initialCase={editingCase} />}
-        {view === 'list' && <CaseList cases={cases} onSelectCase={handleSelectCase} onUpdate={handleBulkUpdateCases} onDelete={handleBulkDeleteCases} users={users} />}
+        {view === 'list' && <CaseList cases={cases} onSelectCase={handleSelectCase} onUpdate={handleBulkUpdateCases} onDelete={handleBulkDeleteCases} onAddCases={handleSaveCase} users={users} projectSettings={projectSettings} />}
         {view === 'detail' && selectedCase && <CaseDetail testCase={selectedCase} onUpdate={handleUpdateCase} onBack={() => goTo('list')} onStartRunner={() => goTo('runner', selectedCase.caseId)} onDelete={handleDeleteCase} onDuplicate={handleDuplicateCase} onReset={handleResetCase} onUpgrade={handleOpenUpgradeAssistant} onAddCases={handleSaveCase} projectSettings={projectSettings} users={users} />}
         {view === 'import' && <BulkUpload onImport={handleImport} onCancel={() => goTo('dashboard')} projectSettings={projectSettings} />}
       </main>

@@ -428,7 +428,12 @@ export const refineTestCase = async (currentCase: TestCase, projectSettings?: Pr
                 title: currentCase.title,
                 summary: currentCase.summary,
                 steps: currentCase.steps.map(s => ({ desc: s.description, expected: s.expectedResult, data: s.testData })),
-                meta: currentCase.meta // Include existing meta
+                meta: currentCase.meta, // Include existing meta
+                // Include existing negative flows so the AI is aware of them and does not silently drop them
+                negativeFlows: (currentCase.negativeFlows || []).map(f => ({
+                    description: f.description,
+                    steps: f.steps.map(s => ({ desc: s.description, expected: s.expectedResult }))
+                }))
             });
 
             const prompt = `
@@ -446,7 +451,9 @@ export const refineTestCase = async (currentCase: TestCase, projectSettings?: Pr
             3. Ergänze fehlende oder generische Testdaten mit realistischen Werten.
             4. Stelle sicher, dass die Schrittanzahl zwischen 5 und 12 liegt (splitte oder fasse zusammen wenn nötig).
             5. Ergänze oder korrigiere das 'meta'-Objekt basierend auf der Taxonomie.
-            6. Ergänze "Negative Flows" basierend auf dem Szenario, falls noch keine da sind.
+            6. "negativeFlows": Das Input Testfall enthält ggf. bereits bestehende Negative/Alternative Flows (Feld "negativeFlows" oben).
+               Übernimm diese IMMER in deiner Antwort (ggf. verbessert/präzisiert). Lösche niemals einen bestehenden Flow ersatzlos.
+               Ergänze zusätzlich neue sinnvolle Flows, falls noch keine oder zu wenige vorhanden sind.
             `;
 
             const response = await ai.models.generateContent({
@@ -472,6 +479,10 @@ export const refineTestCase = async (currentCase: TestCase, projectSettings?: Pr
                 caseStatus: currentCase.caseStatus, // Keep Status
                 createdBy: currentCase.createdBy,
                 lastUpdated: new Date().toISOString(),
+                // Safety net: never let existing negative flows silently disappear if the AI omits them
+                negativeFlows: (rawData.negativeFlows && rawData.negativeFlows.length > 0)
+                    ? rawData.negativeFlows
+                    : currentCase.negativeFlows,
                 steps: rawData.steps.map((s: any) => ({
                     ...s,
                     status: StepStatus.NotStarted, // Reset steps for safety as content changed

@@ -72,6 +72,7 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [addedFlowIds, setAddedFlowIds] = useState<Set<string>>(new Set());
+  const [saveFlowsAsDrafts, setSaveFlowsAsDrafts] = useState(true);
 
   // Matrix State
   const [showMatrix, setShowMatrix] = useState(false);
@@ -203,10 +204,42 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
   };
 
   const handleConfirmSave = () => {
-    if (generatedCase) {
-      onSave(generatedCase);
-      resetForm();
+    if (!generatedCase) return;
+    // Confirming the update never excludes keeping the suggested Alternative/Negative Flows:
+    // they are additionally stored as drafts (unless the user unchecks the option).
+    const casesToSave: TestCase[] = [generatedCase];
+    if (saveFlowsAsDrafts) {
+      casesToSave.push(...buildFlowDraftCases(generatedCase, addedFlowIds));
     }
+    onSave(casesToSave);
+    resetForm();
+  };
+
+  // Turns the AI-suggested negativeFlows into standalone draft cases, so they are never lost.
+  const buildFlowDraftCases = (base: TestCase, excludeFlowIds: Set<string> = new Set()): TestCase[] => {
+    if (!base.negativeFlows) return [];
+    return base.negativeFlows
+      .filter(flow => !excludeFlowIds.has(flow.flowId))
+      .map(flow => {
+        const flowCaseId = `TC-${Math.floor(Math.random() * 100000)}`;
+        return {
+          ...base,
+          caseId: flowCaseId,
+          caseStatus: CaseStatus.Draft,
+          title: `${base.title} - ${flow.description.substring(0, 30)}...`,
+          summary: `Backlog Entwurf basierend auf Flow: ${flow.description}`,
+          steps: flow.steps.map(s => ({
+            ...s,
+            status: StepStatus.NotStarted,
+            testData: s.testData || "",
+            notes: undefined,
+            evidence: undefined,
+            evidenceAnalysis: undefined
+          })),
+          negativeFlows: [],
+          tags: [...base.tags, 'AlternativeFlow', 'Backlog']
+        };
+      });
   };
 
   const handleBulkSaveDrafts = () => {
@@ -223,29 +256,7 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
     casesToSave.push(mainCase);
 
     // 2. All Negative Flows as Drafts
-    if (generatedCase.negativeFlows) {
-        generatedCase.negativeFlows.forEach(flow => {
-             const flowCaseId = `TC-${Math.floor(Math.random() * 100000)}`;
-             const flowDraft: TestCase = {
-                 ...generatedCase,
-                 caseId: flowCaseId,
-                 caseStatus: CaseStatus.Draft,
-                 title: `${generatedCase.title} - ${flow.description.substring(0, 30)}...`,
-                 summary: `Backlog Entwurf basierend auf Flow: ${flow.description}`,
-                 steps: flow.steps.map(s => ({
-                    ...s,
-                    status: StepStatus.NotStarted,
-                    testData: s.testData || "",
-                    notes: undefined,
-                    evidence: undefined,
-                    evidenceAnalysis: undefined
-                })),
-                negativeFlows: [],
-                tags: [...generatedCase.tags, 'AlternativeFlow', 'Backlog']
-             };
-             casesToSave.push(flowDraft);
-        });
-    }
+    casesToSave.push(...buildFlowDraftCases(generatedCase, addedFlowIds));
 
     onSave(casesToSave);
     resetForm();
@@ -257,6 +268,7 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
       setSelectedFile(null);
       setAddedFlowIds(new Set());
       setMatrixSelection({});
+      setSaveFlowsAsDrafts(true);
   };
 
   const handleCreateFromFlow = (flow: NegativeFlow) => {
@@ -657,10 +669,20 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
           
           {generatedCase.negativeFlows && generatedCase.negativeFlows.length > 0 && (
              <div className="mb-6">
-                <h4 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                    <GitBranch size={16} className="text-amber-500" />
-                    Alternative / Negative Flows (Klicken zum Erstellen)
-                </h4>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <GitBranch size={16} className="text-amber-500" />
+                        Alternative / Negative Flows (Klicken zum Erstellen)
+                    </h4>
+                    <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={saveFlowsAsDrafts}
+                            onChange={(e) => setSaveFlowsAsDrafts(e.target.checked)}
+                        />
+                        Beim Speichern zusätzlich als Entwürfe sichern
+                    </label>
+                </div>
                 <div className="grid grid-cols-1 gap-3">
                     {generatedCase.negativeFlows.map(flow => {
                         const isAdded = addedFlowIds.has(flow.flowId);
@@ -708,6 +730,7 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
             <button 
               onClick={handleConfirmSave}
               className={`px-6 py-2 text-white rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors ${initialCase ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'}`}
+              title={saveFlowsAsDrafts && generatedCase.negativeFlows && generatedCase.negativeFlows.length > 0 ? 'Aktualisiert den Testfall und sichert die Alternative/Negative Flows zusätzlich als Entwürfe' : undefined}
             >
               {initialCase ? <RefreshCw size={18} /> : <Save size={18} />}
               {initialCase ? 'Update bestätigen' : 'Nur Haupt-Testfall Speichern'}
