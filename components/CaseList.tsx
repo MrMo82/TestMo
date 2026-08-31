@@ -1,21 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
-import { TestCase, Priority, CaseStatus, User } from '../types';
-import { Search, ChevronRight, PlayCircle, CheckCircle, AlertCircle, Clock, Ban, Download, Rocket, LayoutGrid, List as ListIcon, GripVertical, Trash2, Archive, User as UserIcon } from 'lucide-react';
+import { TestCase, Priority, CaseStatus, StepStatus, User, ProjectSettings } from '../types';
+import { Search, ChevronRight, PlayCircle, CheckCircle, AlertCircle, Clock, Ban, Download, Rocket, LayoutGrid, List as ListIcon, GripVertical, Trash2, Archive, User as UserIcon, Bot, Loader2 } from 'lucide-react';
 import { exportCasesToCSV, exportForZephyr } from '../utils/exportUtils';
+import { refineTestCase } from '../services/geminiService';
 
 interface CaseListProps {
   cases: TestCase[];
   onSelectCase: (testCase: TestCase) => void;
   onUpdate?: (updatedCases: TestCase[]) => void;
   onDelete?: (caseIds: string[]) => void;
+  onAddCases?: (newCases: TestCase[]) => void;
   users: User[];
+  projectSettings?: ProjectSettings | null;
 }
 
 type TabType = 'active' | 'drafts';
 type ViewType = 'list' | 'board';
 
-const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDelete, users }) => {
+const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDelete, onAddCases, users, projectSettings }) => {
   const [activeTab, setActiveTab] = useState<TabType>('active');
   const [viewType, setViewType] = useState<ViewType>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,6 +27,8 @@ const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDe
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
+  const [isBulkUpgrading, setIsBulkUpgrading] = useState(false);
+  const [bulkUpgradeProgress, setBulkUpgradeProgress] = useState({ done: 0, total: 0 });
   
   const [selectedCaseIds, setSelectedCaseIds] = useState<Set<string>>(new Set());
 
@@ -114,6 +119,59 @@ const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDe
       setSelectedCaseIds(new Set());
   };
 
+  // Applies the same AI refinement logic as the single-case "Testfall optimieren" action to all selected cases.
+  const handleBulkAIUpgrade = async () => {
+      if (!onUpdate || selectedCaseIds.size === 0) return;
+      const targets = cases.filter(c => selectedCaseIds.has(c.caseId));
+      if (targets.length === 0) return;
+      if (!window.confirm(`${targets.length} Testfälle mit KI aktualisieren? Bestehende Alternative/Negative Flows bleiben erhalten und werden zusätzlich als Entwürfe gesichert.`)) return;
+
+      setIsBulkUpgrading(true);
+      setBulkUpgradeProgress({ done: 0, total: targets.length });
+
+      const updatedCases: TestCase[] = [];
+      const draftCases: TestCase[] = [];
+
+      for (const c of targets) {
+          try {
+              const refined = await refineTestCase(c, projectSettings || undefined);
+              updatedCases.push(refined);
+
+              // Never let AI suggestions get lost: additionally store negative flows as separate drafts.
+              (refined.negativeFlows || []).forEach(flow => {
+                  const flowCaseId = `TC-${Math.floor(Math.random() * 100000)}`;
+                  draftCases.push({
+                      ...refined,
+                      caseId: flowCaseId,
+                      caseStatus: CaseStatus.Draft,
+                      title: `${refined.title} - ${flow.description.substring(0, 30)}...`,
+                      summary: `Backlog Entwurf basierend auf Flow: ${flow.description}`,
+                      steps: flow.steps.map(s => ({
+                          ...s,
+                          status: StepStatus.NotStarted,
+                          testData: s.testData || "",
+                          notes: undefined,
+                          evidence: undefined,
+                          evidenceAnalysis: undefined
+                      })),
+                      negativeFlows: [],
+                      tags: [...refined.tags, 'AlternativeFlow', 'Backlog']
+                  });
+              });
+          } catch (err) {
+              console.error(`KI-Upgrade fehlgeschlagen für ${c.caseId}`, err);
+          } finally {
+              setBulkUpgradeProgress(prev => ({ ...prev, done: prev.done + 1 }));
+          }
+      }
+
+      if (updatedCases.length > 0) onUpdate(updatedCases);
+      if (draftCases.length > 0 && onAddCases) onAddCases(draftCases);
+
+      setIsBulkUpgrading(false);
+      setSelectedCaseIds(new Set());
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* View Switcher & Tabs */}
@@ -165,6 +223,15 @@ const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDe
                         {activeTab === 'drafts' && (
                             <button onClick={handleActivateSelected} className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"><Rocket size={16} /> Aktivieren</button>
                         )}
+                        <button
+                            onClick={handleBulkAIUpgrade}
+                            disabled={isBulkUpgrading}
+                            className="flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Erweitert alle ausgewählten Testfälle tiefergehend per KI (wie 'Testfall optimieren' im Detail)"
+                        >
+                            {isBulkUpgrading ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} />}
+                            {isBulkUpgrading ? `KI-Upgrade (${bulkUpgradeProgress.done}/${bulkUpgradeProgress.total})` : `KI-Upgrade (${selectedCaseIds.size})`}
+                        </button>
                         <button onClick={handleDeleteSelected} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm hover:bg-red-100" title="Ausgewählte löschen">
                             <Trash2 size={16} /> <span className="hidden sm:inline">Löschen ({selectedCaseIds.size})</span>
                         </button>
