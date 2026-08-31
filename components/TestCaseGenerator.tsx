@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { generateTestCaseFromAI, MediaInput } from '../services/geminiService';
+import { generateTestCaseFromAI, MediaInput, ArtifactMode } from '../services/geminiService';
 import { TestCase, Priority, NegativeFlow, StepStatus, CaseStatus, ProjectSettings } from '../types';
 import { Sparkles, Loader2, Save, X, Database, Image as ImageIcon, Trash2, FileText, Upload, GitBranch, Plus, Check, Settings, Archive, RefreshCw, Sliders } from 'lucide-react';
 
@@ -76,6 +76,15 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
   // Matrix State
   const [showMatrix, setShowMatrix] = useState(false);
   const [matrixSelection, setMatrixSelection] = useState<Record<string, string>>({});
+    const [artifactMode, setArtifactMode] = useState<ArtifactMode>(projectSettings?.artifactModeDefault || 'auto');
+    const [strictContract, setStrictContract] = useState<boolean>(projectSettings?.strictQAContract ?? true);
+    const [customInstruction, setCustomInstruction] = useState<string>(projectSettings?.qaInstruction || '');
+
+    useEffect(() => {
+            setArtifactMode(projectSettings?.artifactModeDefault || 'auto');
+            setStrictContract(projectSettings?.strictQAContract ?? true);
+            setCustomInstruction(projectSettings?.qaInstruction || '');
+    }, [projectSettings]);
 
   // Initialize form if editing an existing case
   useEffect(() => {
@@ -164,7 +173,12 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
             userRole, 
             priority, 
             mediaPayload,
-            projectSettings || undefined
+                        projectSettings || undefined,
+                        {
+                            artifactMode,
+                            strictContract,
+                            customContract: customInstruction
+                        }
         );
 
         // If in upgrade mode, preserve the original ID and metadata
@@ -449,6 +463,28 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
                     </select>
                 </div>
 
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Artefaktmodus</label>
+                    <select
+                        className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={artifactMode}
+                        onChange={(e) => setArtifactMode(e.target.value as ArtifactMode)}
+                    >
+                        <option value="auto">Auto (Readiness-basiert)</option>
+                        <option value="testcase">Ausführbarer Testfall</option>
+                        <option value="draft_backlog">Draft-Szenario-Backlog</option>
+                    </select>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        checked={strictContract}
+                        onChange={(e) => setStrictContract(e.target.checked)}
+                    />
+                    Strikter QA-Contract
+                </label>
+
                 {mode !== 'text' && (
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Zusatzinfos (Optional)</label>
@@ -460,6 +496,18 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
                         />
                     </div>
                 )}
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Zusatzregelwerk (optional)</label>
+                    <textarea
+                        className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs h-24 resize-y font-mono"
+                        value={customInstruction}
+                        onChange={(e) => setCustomInstruction(e.target.value)}
+                        maxLength={8000}
+                        placeholder="Optional: Eigene QA-Regeln oder Output Contract"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">Zeichen: {customInstruction.length} / 8000</p>
+                </div>
             </div>
           </div>
 
@@ -540,6 +588,11 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{generatedCase.caseId}</span>
               <h3 className="text-2xl font-bold text-slate-900">{generatedCase.title}</h3>
               <p className="text-slate-600 mt-1">{generatedCase.summary}</p>
+                            {generatedCase.caseStatus === CaseStatus.Draft && (
+                                    <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded">
+                                            Readiness: Draft. Die Ausgabe ist als Szenario-Backlog zu verstehen und nicht als Ready-Ausfuehrung.
+                                    </p>
+                            )}
               {/* Show Matrix Context in Result */}
               {Object.keys(matrixSelection).length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">

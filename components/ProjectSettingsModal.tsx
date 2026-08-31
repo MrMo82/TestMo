@@ -16,7 +16,10 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
     description: '',
     systems: '',
     urls: '',
-    releaseVersion: ''
+    releaseVersion: '',
+    qaInstruction: '',
+    strictQAContract: true,
+    artifactModeDefault: 'auto'
   });
 
   if (!isOpen) return null;
@@ -100,6 +103,44 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
               onChange={e => setSettings({...settings, description: e.target.value})}
               placeholder="Kurze Beschreibung des Scopes..."
             />
+          </div>
+
+          <div className="border-t pt-4 space-y-4">
+            <h3 className="text-sm font-bold text-slate-800">QA Governance</h3>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settings.strictQAContract ?? true}
+                onChange={e => setSettings({ ...settings, strictQAContract: e.target.checked })}
+              />
+              Strikten QA-Contract anwenden (Draft-first bei unklarer Spezifikation)
+            </label>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Standard Artefaktmodus</label>
+              <select
+                className="w-full p-2 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                value={settings.artifactModeDefault || 'auto'}
+                onChange={e => setSettings({ ...settings, artifactModeDefault: e.target.value as ProjectSettings['artifactModeDefault'] })}
+              >
+                <option value="auto">Auto (Readiness-basiert)</option>
+                <option value="testcase">Ausführbarer Testfall</option>
+                <option value="draft_backlog">Draft-Szenario-Backlog</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Custom QA-Instruction (optional)</label>
+              <textarea
+                className="w-full p-2 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none h-28 resize-y font-mono text-xs"
+                value={settings.qaInstruction || ''}
+                onChange={e => setSettings({ ...settings, qaInstruction: e.target.value })}
+                maxLength={8000}
+                placeholder="Optional: eigener QA Output Contract / Projektvorgaben"
+              />
+              <p className="text-xs text-slate-500 mt-1">Wenn leer, verwendet die App einen kompakten Standard-Contract. Limit: 8000 Zeichen.</p>
+            </div>
           </div>
 
           <button 

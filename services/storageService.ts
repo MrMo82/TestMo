@@ -2,20 +2,9 @@
 import { TestCase, User, ProjectSettings, ActivityLog } from '../types';
 
 const STORAGE_KEY_CASES = 'testmo_cases_v1';
-const STORAGE_KEY_USER = 'testmo_user_session';
 const STORAGE_KEY_USERS_DB = 'testmo_users_db';
 const STORAGE_KEY_SETTINGS = 'testmo_project_settings';
 const STORAGE_KEY_ACTIVITY = 'testmo_activity_log';
-
-// Default Admin
-const DEFAULT_ADMIN: User = {
-  username: 'admin',
-  name: 'MoFlow Admin',
-  role: 'Admin',
-  initials: 'AD',
-  color: '#0ea5e9', // Sky 500
-  avatarUrl: 'https://ui-avatars.com/api/?name=Mo+Flow&background=0ea5e9&color=fff'
-};
 
 export const storageService = {
   // --- AUTHENTICATION & USER MANAGEMENT ---
@@ -25,12 +14,9 @@ export const storageService = {
           const stored = localStorage.getItem(STORAGE_KEY_USERS_DB);
           if (stored) return JSON.parse(stored);
           
-          // Init with default admin if empty
-          const initialUsers = [DEFAULT_ADMIN];
-          localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(initialUsers));
-          return initialUsers;
+            return [];
       } catch (e) {
-          return [DEFAULT_ADMIN];
+            return [];
       }
   },
 
@@ -47,37 +33,8 @@ export const storageService = {
   },
 
   deleteUser: (username: string) => {
-      if (username === 'admin') return; // Protect admin
       const users = storageService.getUsers().filter(u => u.username !== username);
       localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(users));
-  },
-
-  login: async (username: string, password: string): Promise<User | null> => {
-    // Simulating API latency
-    await new Promise(resolve => setTimeout(resolve, 600));
-
-    // For MVP: Password check is skipped/mocked. In real app, hash check here.
-    // We accept any password for now if username exists.
-    const users = storageService.getUsers();
-    const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-
-    if (foundUser) {
-      if (password === 'password') { // Simple mock check
-          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(foundUser));
-          storageService.logActivity(foundUser.name, 'login', 'System', 'Benutzer angemeldet');
-          return foundUser;
-      }
-    }
-    return null;
-  },
-
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEY_USER);
-  },
-
-  getCurrentUser: (): User | null => {
-    const stored = localStorage.getItem(STORAGE_KEY_USER);
-    return stored ? JSON.parse(stored) : null;
   },
 
   // --- DATABASE (LocalStorage) ---

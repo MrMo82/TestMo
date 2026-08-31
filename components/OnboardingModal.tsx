@@ -17,7 +17,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => {
             <X size={24} />
           </button>
           <h2 className="text-2xl font-bold mb-2">Willkommen im Test Manager! 👋</h2>
-          <p className="text-blue-100">Dein KI-gestützter Assistent für CMP Schweiz.</p>
+          <p className="text-blue-100">Deine Arbeitsumgebung für strukturiertes Testmanagement.</p>
         </div>
         
         <div className="p-6 space-y-6">
@@ -28,7 +28,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => {
             <div>
                 <h3 className="font-semibold text-slate-800">1. KI-Testfall Erstellung</h3>
                 <p className="text-slate-600 text-sm">
-                  Gehe zu <strong>"Neuer Testfall (KI)"</strong>. Beschreibe einfach dein Szenario (z.B. "Antrag mit fehlenden Daten"), und die KI erstellt alle Schritte inklusive Testdaten für dich.
+                  Beschreibe ein Testszenario, prüfe die vorgeschlagenen Inhalte und entwickle daraus einen ausführbaren Testfall.
                 </p>
             </div>
           </div>
@@ -52,7 +52,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => {
             <div>
                 <h3 className="font-semibold text-slate-800">3. Dashboard & Export</h3>
                 <p className="text-slate-600 text-sm">
-                  Behalte den Überblick über Pass-Rates im Dashboard oder importiere bestehende Fälle via CSV im Reiter <strong>"Import"</strong>.
+                  Behalte den Überblick über Ausführungen, Fehler und Fortschritt im Dashboard.
                 </p>
             </div>
           </div>

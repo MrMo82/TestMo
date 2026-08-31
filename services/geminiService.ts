@@ -20,6 +20,30 @@ export interface DefectReport {
     category?: string;
 }
 
+export type ArtifactMode = 'auto' | 'testcase' | 'draft_backlog';
+
+export interface QAGovernanceOptions {
+    artifactMode?: ArtifactMode;
+    strictContract?: boolean;
+    customContract?: string;
+}
+
+const QA_OUTPUT_CONTRACT_COMPACT = `
+QA OUTPUT CONTRACT (kompakt, verbindlich):
+- Trenne Fakten, Annahmen, Vorschlaege, offene Punkte.
+- Erfinde keine Systeme, Felder, Regeln, HTTP-Codes, Endpunkte, Authentifizierung, Retry, Monitoring oder Sollzustaende.
+- Nur bestaetigte Quellen als Fakt/In Scope; alles andere als "Scope offen" markieren.
+- Ohne Fach-/Prozess-/API-Spezifikation: keine Ready-Testfaelle; stattdessen Draft-Szenarien mit fehlendem Input und fehlendem Soll.
+- Jeder ausfuehrbare Test braucht objektive PASS/FAIL/BLOCKED-Kriterien.
+- Keine belastbare Testfallanzahl ohne Herleitung aus Scope, Varianten und Risiken.
+- Nutze nur kontrollierte Testtypen: Smoke, Functional, Negative, Boundary, Integration, System, E2E, Regression, Security, Performance, Resilience, API, UAT, Exploratory.
+`;
+
+const hasSpecificationSignals = (context: string): boolean => {
+    const specPattern = /api|endpoint|swagger|openapi|http|json|xml|user\s*story|akzeptanzkriter|prozess|workflow|feld|format|regel|soll|requirement|risiko/i;
+    return specPattern.test(context);
+};
+
 const SYSTEM_INSTRUCTION_BASE = `
 Du bist ein präziser Testfall-Ersteller und UX-bewusster Testassistent spezialisiert auf fachliche Tester (Business User) ohne technische Vorerfahrung.
 Du bist der Assistent von "TestMo", dem Testmanagement-Tool von MoFlowSystems bei Hays.
@@ -258,7 +282,8 @@ export const generateTestCaseFromAI = async (
   userRole: string = "Case Manager", 
   priorityInput: string = "Medium",
   mediaInput?: MediaInput,
-  projectSettings?: ProjectSettings
+    projectSettings?: ProjectSettings,
+    qaOptions?: QAGovernanceOptions
 ): Promise<TestCase> => {
   // Using explicit high retry config for reliability
   return runWithRetry(async () => {
@@ -272,6 +297,18 @@ export const generateTestCaseFromAI = async (
         Aktuelles Release: ${projectSettings.releaseVersion}
         ` : "";
 
+                const strictContract = qaOptions?.strictContract ?? projectSettings?.strictQAContract ?? true;
+                const artifactMode: ArtifactMode = qaOptions?.artifactMode ?? projectSettings?.artifactModeDefault ?? 'auto';
+                const customContract = (qaOptions?.customContract ?? projectSettings?.qaInstruction ?? '').trim();
+
+                const shouldForceDraft =
+                        artifactMode === 'draft_backlog' ||
+                        (artifactMode === 'auto' && strictContract && !hasSpecificationSignals(context));
+
+                const governanceBlock = strictContract
+                        ? (customContract.length > 0 ? customContract : QA_OUTPUT_CONTRACT_COMPACT)
+                        : '';
+
         let textPrompt = `
           Erstelle einen Testcase für CMP Schweiz (Projekt TestMo).
           ${projectContext}
@@ -279,6 +316,9 @@ export const generateTestCaseFromAI = async (
           Kontext/Anweisung: ${context}
           User Rolle: ${userRole}
           Gewünschte Priorität: ${priorityInput}
+
+                    Governance Modus: ${artifactMode}
+                    Draft erzwungen (Readiness): ${shouldForceDraft ? 'Ja' : 'Nein'}
           
           Achte besonders auf realistische Testdaten im Feld 'testData' für jeden Schritt passend zu den Systemen (${projectSettings?.systems || 'Standard'}).
           Wenn Input ein Feature Request ist, extrahiere Acceptance Criteria.
@@ -286,7 +326,24 @@ export const generateTestCaseFromAI = async (
           WICHTIG: 
           1. Analysiere den Kontext und fülle das 'meta'-Objekt mit den passenden Werten aus der Taxonomie (z.B. CHANNEL, WEBSITE, ENTITY_TYPE).
           2. Generiere einen lesbaren Titel für Fachanwender: "<ID>: <Natürlicher Satz>". KEIN Snake_Case!
+                    3. Nutze nur Inhalte, die aus Kontext/Quelle ableitbar sind. Keine erfundenen Soll-Reaktionen.
         `;
+
+                if (governanceBlock) {
+                        textPrompt += `\n\nVERBINDLICHER QA CONTRACT:\n${governanceBlock}`;
+                }
+
+                if (shouldForceDraft) {
+                        textPrompt += `
+
+                        ZUSATZREGELN FUER DRAFT-BACKLOG:
+                        - Erzeuge KEINEN Ready-Testfall.
+                        - Erzeuge einen Draft-Hauptfall (Backlog) plus 3-8 Draft-Szenarien in 'negativeFlows'.
+                        - In jedem Draft-Szenario: beschreibe Risiko, fehlenden Input und fehlendes Soll in description/expectedResult.
+                        - Wenn Faktenlage duenn ist, benenne nur die bestaetigten Fakten und markiere alles Weitere als offen.
+                        - Verwende klare Platzhalter wie "Offen: Fachregel nicht bestaetigt" statt erfundener Reaktion.
+                        `;
+                }
 
         if (mediaInput) {
             if (mediaInput.mimeType === 'application/pdf') {
@@ -332,9 +389,14 @@ export const generateTestCaseFromAI = async (
 
         const hydratedCase: TestCase = {
           ...rawData,
-          caseStatus: CaseStatus.NotStarted,
+                    caseStatus: shouldForceDraft ? CaseStatus.Draft : CaseStatus.NotStarted,
           lastUpdated: new Date().toISOString(),
           createdBy: userRole,
+                    tags: [
+                        ...(rawData.tags || []),
+                        ...(shouldForceDraft ? ['DraftBacklog', 'ScopeOpen'] : []),
+                        ...(strictContract ? ['StrictQAContract'] : [])
+                    ],
           steps: rawData.steps.map((s: any) => ({
             ...s,
             status: StepStatus.NotStarted,
