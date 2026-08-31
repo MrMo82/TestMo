@@ -28,6 +28,55 @@ export interface ProjectSettings {
   systems: string; // Comma separated list (IRIS, Salesforce, etc.)
   urls: string; // Comma separated list
   releaseVersion: string; // e.g., "IRIS 3.02.03 PF"
+  qaInstruction?: string;
+  strictQAContract?: boolean;
+  artifactModeDefault?: 'auto' | 'testcase' | 'draft_backlog';
+}
+
+export interface Project {
+  id: string;
+  projectKey: string;
+  name: string;
+  description: string;
+  goal: string;
+  testObject: string;
+  release: string;
+  status: 'draft' | 'active' | 'archived';
+  ownerId: string;
+  inScope: string;
+  outOfScope: string;
+  unchangedProcesses: string;
+  knownInterfaces: string;
+  systems: string;
+  channels: string;
+  knownRisks: string;
+  compliancePrivacy: string;
+  entryCriteria: string;
+  exitCriteria: string;
+  goLiveCriteria: string;
+  intakeStep: 1 | 2 | 3 | 4;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Source {
+  id: string;
+  projectId: string;
+  title: string;
+  originalFileName: string;
+  mimeType: string;
+  sourceType: 'docx' | 'pdf' | 'xlsx' | 'csv' | 'txt' | 'json' | 'openapi' | 'image' | 'link' | 'text';
+  version: number;
+  approvalStatus: 'draft' | 'in_review' | 'approved' | 'rejected' | 'obsolete';
+  authorityLevel: 'proposed' | 'confirmed' | 'authoritative';
+  extractionStatus: 'not_started' | 'queued' | 'processing' | 'completed' | 'failed' | 'not_applicable';
+  storagePath: string | null;
+  sourceUrl: string | null;
+  checksum: string | null;
+  uploadedBy: string;
+  uploadedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EvidenceAnalysis {
@@ -131,7 +180,7 @@ export interface DashboardStats {
 export interface User {
   username: string;
   name: string;
-  role: 'Admin' | 'Tester' | 'Viewer';
+  role: 'Admin' | 'Project Owner' | 'Test Designer' | 'Tester' | 'Reviewer' | 'Viewer';
   avatarUrl?: string;
   initials?: string;
   color?: string; // Hex color for avatar bg

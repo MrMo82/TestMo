@@ -42,7 +42,6 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
 
   useEffect(() => { 
       setCurrentCase(testCase); 
-      setCurrentUser(storageService.getCurrentUser());
   }, [testCase]);
 
   const toggleStepExpansion = (stepId: string) => {

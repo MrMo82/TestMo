@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { TestCase, Priority, CaseStatus, User } from '../types';
 import { Search, ChevronRight, PlayCircle, CheckCircle, AlertCircle, Clock, Ban, Download, Rocket, LayoutGrid, List as ListIcon, GripVertical, Trash2, Archive, User as UserIcon } from 'lucide-react';
 import { exportCasesToCSV, exportForZephyr } from '../utils/exportUtils';
-import { storageService } from '../services/storageService';
 
 interface CaseListProps {
   cases: TestCase[];
@@ -27,10 +26,6 @@ const CaseList: React.FC<CaseListProps> = ({ cases, onSelectCase, onUpdate, onDe
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
   
   const [selectedCaseIds, setSelectedCaseIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-      setCurrentUser(storageService.getCurrentUser());
-  }, []);
 
   const getUserAvatar = (username?: string) => {
       const u = users.find(user => user.username === username);
