@@ -1,5 +1,6 @@
 
 export enum Priority {
+  Critical = 'Critical',
   High = 'High',
   Medium = 'Medium',
   Low = 'Low'
@@ -22,15 +23,154 @@ export enum CaseStatus {
   Blocked = 'Blocked'
 }
 
+// --- Kontextmodell: Confirmation / Readiness ---
+
+export enum ConfirmationStatus {
+  Confirmed = 'Confirmed',
+  ReviewRequired = 'Review Required',
+  Deprecated = 'Deprecated'
+}
+
+export enum Readiness {
+  Confirmed = 'Confirmed',
+  ConditionalReady = 'Conditional Ready',
+  Draft = 'Draft / Blocked'
+}
+
+// --- Kontextprofil (z.B. "Allgemein", "Hays Talent Delivery") ---
+
+export interface ContextProfileSystem {
+  key: string;
+  label: string;
+  description?: string;
+}
+
+export interface ContextProfileProcess {
+  key: string;
+  label: string;
+  description?: string;
+  targetMailbox?: string; // fachliche Ziel-Mailbox, nur wenn bestaetigt
+  targetSpoolLabel?: string; // fachliche Spoolbezeichnung, nur wenn bestaetigt
+  mandatoryRule?: string; // z.B. "update-only"
+  confirmationStatus: ConfirmationStatus;
+  systemChain?: string[]; // z.B. ['Freelancermap', 'Hays Web/API', 'Daxtra Capture', 'IRIS']
+}
+
+export interface ContextProfile {
+  id: string;
+  organization: string;
+  name: string;
+  version: string;
+  status: 'active' | 'draft' | 'archived';
+  systems: ContextProfileSystem[];
+  processes: ContextProfileProcess[];
+  fields: string[]; // Data-Dictionary-Entry-IDs, die zu diesem Profil gehoeren
+  controlledValues: string[]; // ControlledValueSet-Keys, die zu diesem Profil gehoeren
+  routingRules: string[]; // RoutingRule-IDs
+  wordingRules: string[]; // TerminologyRule-IDs
+  forbiddenTerms: string[];
+  evidenceTypes: string[];
+  qaRules: string[]; // kurze, strukturierte QA-Contract-Saetze
+  dataDictionaryVersions: string[]; // verfuegbare/aktive Versionen
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Data Dictionary ---
+
+export interface DataDictionaryEntry {
+  id: string;
+  domain: string; // z.B. 'Website/EML', 'Daxtra Standard', 'Daxtra User Field', 'IRIS', 'Freelancermap API'
+  displayName: string; // Hays-Anzeigename
+  technicalName: string; // technischer Name bzw. Prefix (z.B. DXFNM)
+  prefix?: string;
+  sourceSystem?: string;
+  targetSystem?: string;
+  targetField?: string;
+  description: string;
+  allowedValues?: string[];
+  requiredRule?: string;
+  validationRule?: string;
+  confirmationStatus: ConfirmationStatus;
+  usageNotes?: string;
+  sourceReference?: string;
+  active: boolean;
+  contextProfileId: string;
+  dataDictionaryVersion: string;
+  applicableProcesses?: string[]; // ContextProfileProcess-Keys
+}
+
+// --- kontrollierte Wertelisten ---
+
+export interface ControlledValueSet {
+  key: string;
+  label: string;
+  values: string[];
+  multiSelect: boolean;
+  required: boolean;
+  applicableProjects?: string[]; // ContextProfile-IDs oder Projekttypen
+  confirmationStatus: ConfirmationStatus;
+  version: string;
+}
+
+// --- Terminologie- und Routingregeln ---
+
+export interface TerminologyRule {
+  id: string;
+  forbiddenTerm: string;
+  replacementGuidance: string;
+  contextCondition?: string; // z.B. "IRIS ist Zielsystem"
+  severity: 'error' | 'warning' | 'info';
+  contextProfileId: string;
+}
+
+export interface RoutingRule {
+  id: string;
+  processKey: string;
+  description: string;
+  targetMailbox?: string;
+  targetSpoolLabel?: string;
+  mandatoryRule?: string;
+  confirmationStatus: ConfirmationStatus;
+  contextProfileId: string;
+}
+
+export interface SystemUrlEntry {
+  id: string;
+  environment: string;
+  system: string;
+  url: string;
+  purpose?: string;
+  status?: 'active' | 'inactive' | 'planned';
+  note?: string;
+}
+
 export interface ProjectSettings {
   projectName: string;
   description: string;
-  systems: string; // Comma separated list (IRIS, Salesforce, etc.)
-  urls: string; // Comma separated list
+  systems: string; // Comma separated list (IRIS, Salesforce, etc.) - legacy, weiterhin unterstuetzt
+  urls: string; // Comma separated list - legacy, weiterhin unterstuetzt
   releaseVersion: string; // e.g., "IRIS 3.02.03 PF"
   qaInstruction?: string;
   strictQAContract?: boolean;
   artifactModeDefault?: 'auto' | 'testcase' | 'draft_backlog';
+
+  // Erweiterter Kontext (optional, rueckwaertskompatibel)
+  fixVersion?: string;
+  contextProfileId?: string;
+  dataDictionaryVersion?: string;
+  selectedSystems?: string[];
+  otherSystems?: string[];
+  selectedEnvironments?: string[];
+  selectedProcesses?: string[];
+  selectedEvidenceTypes?: string[];
+  systemUrls?: SystemUrlEntry[];
+  irisFields?: string[];
+  daxtraFields?: string[];
+  websiteEmlFields?: string[];
+  apiFields?: string[];
+  forbiddenTerms?: string[];
+  approvedRoutingKeys?: string[];
 }
 
 export interface Project {
@@ -57,6 +197,23 @@ export interface Project {
   intakeStep: 1 | 2 | 3 | 4;
   createdAt: string;
   updatedAt: string;
+
+  // Hays-Kontextmodell (optional, rueckwaertskompatibel - bestehende Projekte ohne diese Felder bleiben lesbar)
+  testGoal?: string;
+  strictQaContract?: boolean;
+  defaultArtifactMode?: 'auto' | 'testcase' | 'draft_backlog';
+  customQaInstruction?: string;
+  organizationProfileId?: string;
+  contextProfileId?: string;
+  projectType?: string;
+  dataDictionaryVersion?: string;
+  selectedSystems?: string[];
+  selectedEnvironments?: string[];
+  selectedProcesses?: string[];
+  selectedEvidenceTypes?: string[];
+  terminologyRules?: string[];
+  businessOwner?: string;
+  technicalOwner?: string;
 }
 
 export interface Source {
@@ -145,12 +302,35 @@ export interface CMPMeta {
   TEMPLATE_FALLBACK?: "None" | "EU";
 }
 
+export interface TerminologyFinding {
+  severity: 'error' | 'warning' | 'info';
+  term: string;
+  message: string;
+  ruleId?: string;
+}
+
+export interface HaysTestContext {
+  system?: string[];
+  environment?: string;
+  applicationFlow?: string; // Bewerbungsweg
+  testType?: string[];
+  submissionType?: string;
+  websiteEmlFields?: string[];
+  daxtraFields?: string[];
+  expectedDaxtraStatus?: string[];
+  irisFields?: string[];
+  expectedIrisOutcome?: string[];
+  matchingResult?: string;
+  documentRole?: string[];
+  fileTypes?: string[];
+}
+
 export interface TestCase {
   caseId: string;
   title: string;
   summary: string;
   tags: string[];
-  meta?: CMPMeta; // Strukturierte Dimensionen
+  meta?: CMPMeta; // Strukturierte Dimensionen (optionales CMP-Kontextprofil)
   priority: Priority;
   type: 'functional' | 'regression' | 'smoke' | 'exploratory';
   preconditions: string[];
@@ -166,6 +346,14 @@ export interface TestCase {
   // User Management
   assignedTo?: string; // Username of the assignee
   executedBy?: string; // Username of the person who executed/is executing
+
+  // Hays-Kontextmodell (optional, rueckwaertskompatibel)
+  contextProfileId?: string;
+  dataDictionaryVersion?: string;
+  readiness?: Readiness;
+  haysContext?: HaysTestContext;
+  evidenceRequirements?: string[];
+  terminologyFindings?: TerminologyFinding[];
 }
 
 export interface DashboardStats {

@@ -1,15 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
-import { TestCase, CaseStatus, StepStatus, Priority, ActivityLog } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { TestCase, CaseStatus, StepStatus, Priority, ActivityLog, Readiness, TerminologyFinding } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-  CheckCircle, AlertTriangle, Activity, Layers, Bug, Ban, AlertCircle, MousePointerClick
+  CheckCircle, AlertTriangle, Activity, Layers, Bug, Ban, AlertCircle, MousePointerClick, ShieldAlert, Clock
 } from 'lucide-react';
 import DashboardDrillDown from './DashboardDrillDown';
 import ActivityFeed from './ActivityFeed';
 import { storageService } from '../services/storageService';
+import { checkTestCasesTerminology, hasBlockingFindings } from '../services/terminologyService';
 
 interface DashboardProps {
   cases: TestCase[];
@@ -35,6 +36,22 @@ const Dashboard: React.FC<DashboardProps> = ({ cases }) => {
   // Data Prep
   const activeCases = cases.filter(c => c.caseStatus !== CaseStatus.Draft);
   const drafts = cases.filter(c => c.caseStatus === CaseStatus.Draft);
+  const conditionalReadyCases = cases.filter(c => c.readiness === Readiness.ConditionalReady);
+
+  // Terminologiefehler: nur fuer Faelle mit gesetztem Kontextprofil berechnen (kein Blindversand/Vollscan noetig)
+  const casesWithContext = useMemo(() => cases.filter(c => c.contextProfileId), [cases]);
+  const terminologyFindingsByCase = useMemo(
+    () => checkTestCasesTerminology(casesWithContext, {}),
+    [casesWithContext]
+  );
+  const terminologyErrorCaseCount = useMemo(
+    () => Array.from(terminologyFindingsByCase.values()).filter(hasBlockingFindings).length,
+    [terminologyFindingsByCase]
+  );
+  const reviewRequiredCaseCount = useMemo(
+    () => Array.from(terminologyFindingsByCase.values()).filter((findings: TerminologyFinding[]) => findings.some(f => f.severity === 'warning')).length,
+    [terminologyFindingsByCase]
+  );
   
   const stats = {
     total: activeCases.length,
@@ -114,7 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({ cases }) => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Management Cockpit</h2>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Übersicht</h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Echtzeit-Übersicht des Projektstatus.</p>
         </div>
         <div className="text-left md:text-right hidden md:block glass-panel px-4 py-2 rounded-lg">
@@ -128,7 +145,14 @@ const Dashboard: React.FC<DashboardProps> = ({ cases }) => {
         <KPICard title="Aktive Tests" value={stats.total} icon={<Activity size={20} />} color="blue" onClick={() => handleCardClick('Total')} />
         <KPICard title="Erfolgreich" value={stats.passed} icon={<CheckCircle size={20} />} color="green" onClick={() => handleCardClick('Passed')} subtext={`${Math.round((stats.passed / (stats.total || 1)) * 100)}% Success`} />
         <KPICard title="Blocker / Failed" value={stats.failed + stats.blocked} icon={<AlertTriangle size={20} />} color="red" onClick={() => handleCardClick('Failed')} subtext={stats.failed > 0 ? "Kritische Fehler!" : "System Stabil"} />
-        <KPICard title="Backlog" value={stats.drafts} icon={<Layers size={20} />} color="purple" onClick={() => handleCardClick('Drafts')} subtext="Entwürfe" />
+        <KPICard title="Backlog" value={stats.drafts} icon={<Layers size={20} />} color="purple" onClick={() => handleCardClick('Drafts')} subtext="Entwürfe (nicht in Pass Rate enthalten)" />
+      </div>
+
+      {/* Hays-Kontext KPIs: Draft/Conditional-Ready/Terminologie sind bewusst getrennt von der Pass Rate */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICard title="Conditional Ready" value={conditionalReadyCases.length} icon={<Clock size={20} />} color="blue" subtext="Noch nicht final bestätigt" />
+        <KPICard title="Terminologiefehler" value={terminologyErrorCaseCount} icon={<ShieldAlert size={20} />} color="red" subtext="Testfälle mit blockierenden Findings" />
+        <KPICard title="Review Required" value={reviewRequiredCaseCount} icon={<AlertCircle size={20} />} color="purple" subtext="Testfälle mit Review-Required-Werten" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">

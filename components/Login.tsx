@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthProvider';
-import { ShieldCheck, Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
+import BrandLogo from './BrandLogo';
+import { PRODUCT_NAME } from '../theme/brand';
 
 interface LoginProps {}
 
@@ -35,14 +37,14 @@ const Login: React.FC<LoginProps> = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 animate-fade-in-up">
         
-        <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-900 opacity-90"></div>
+        <div className="bg-[color:var(--color-text-primary)] p-8 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--color-action-primary)] to-[color:var(--color-text-primary)] opacity-90"></div>
           <div className="relative z-10 flex flex-col items-center">
             <div className="bg-white/10 p-3 rounded-xl mb-4 backdrop-blur-sm border border-white/20">
-                <ShieldCheck className="text-white" size={40} />
+                <BrandLogo variant="reversed" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-1">TestMo</h1>
-            <p className="text-blue-100 text-sm">Sichere Projektanmeldung</p>
+            <h1 className="text-3xl font-bold text-white mb-1">Willkommen im {PRODUCT_NAME}</h1>
+            <p className="text-white/80 text-sm">Testfälle strukturiert erstellen, ausführen und nachvollziehbar dokumentieren.</p>
           </div>
         </div>
 

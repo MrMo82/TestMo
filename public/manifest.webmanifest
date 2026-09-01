@@ -1,0 +1,17 @@
+{
+  "name": "Hays Test Hub",
+  "short_name": "Test Hub",
+  "description": "Hays-internal platform for structured test design, execution and quality evidence.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0A0532",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/brand/hays-symbol.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

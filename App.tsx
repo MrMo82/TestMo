@@ -16,8 +16,11 @@ import SourcesPage from './components/SourcesPage';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { TestCase, Priority, CaseStatus, StepStatus, User, ProjectSettings } from './types';
 import { storageService } from './services/storageService';
-import { Layout, Plus, FileText, Upload, HelpCircle, ShieldCheck, LogOut, User as UserIcon, Settings, Moon, Sun, FolderKanban } from 'lucide-react';
+import { Layout, Plus, FileText, Upload, HelpCircle, LogOut, User as UserIcon, Settings, Moon, Sun, FolderKanban, Palette } from 'lucide-react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import BrandLogo from './components/BrandLogo';
+import DesignSystemPage from './components/DesignSystemPage';
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from './theme/brand';
 
 const INITIAL_CASES_DATA: TestCase[] = [];
 
@@ -185,22 +188,29 @@ function AppContent() {
   const isSourcesRoute = location.pathname.endsWith('/sources');
   const isProjectsRoute = location.pathname === '/projects';
   const isProjectOverviewRoute = /^\/projects\/[^/]+$/.test(location.pathname) && location.pathname !== `/projects/${PROJECT_ID}`;
+  const isDesignSystemRoute = location.pathname === '/admin/design-system';
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} animate-fade-in print-container`}>
       <header className="glass-panel sticky top-0 z-30 no-print border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => goTo('dashboard')}>
-            <div className="bg-blue-600 text-white p-1.5 rounded-lg shadow-lg shadow-blue-500/30"><ShieldCheck size={24} /></div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">TestMo Next</h1>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => goTo('dashboard')}>
+            <BrandLogo variant="symbol" />
+            <div className="leading-tight">
+              <h1 className="text-xl font-bold text-[color:var(--color-text-primary)] dark:text-white">{PRODUCT_NAME}</h1>
+              <p className="hidden sm:block text-[11px] text-[color:var(--color-text-secondary)]">{PRODUCT_TAGLINE}</p>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
-            <button onClick={toggleTheme} className="text-slate-400 hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+            <button onClick={toggleTheme} aria-label={isDarkMode ? 'Zu hellem Design wechseln' : 'Zu dunklem Design wechseln'} className="text-slate-400 hover:text-[color:var(--color-action-primary)] transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
                 {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <button onClick={() => setShowSettingsModal(true)} className="text-slate-400 hover:text-blue-600 transition-colors"><Settings size={22} /></button>
-            <button onClick={() => setShowOnboarding(true)} className="text-slate-400 hover:text-blue-600 transition-colors"><HelpCircle size={22} /></button>
+            {currentUser.role === 'Admin' && (
+              <button onClick={() => navigate('/admin/design-system')} aria-label="Design-System öffnen" title="Design-System (nur Admin)" className="text-slate-400 hover:text-[color:var(--color-action-primary)] transition-colors"><Palette size={22} /></button>
+            )}
+            <button onClick={() => setShowSettingsModal(true)} aria-label="Projektkonfiguration öffnen" className="text-slate-400 hover:text-[color:var(--color-action-primary)] transition-colors"><Settings size={22} /></button>
+            <button onClick={() => setShowOnboarding(true)} aria-label="Hilfe öffnen" className="text-slate-400 hover:text-[color:var(--color-action-primary)] transition-colors"><HelpCircle size={22} /></button>
             <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
             <div className="flex items-center gap-3">
                 <div className="flex flex-col items-end"><span className="text-xs font-bold text-slate-700 dark:text-slate-300">{currentUser.name}</span><span className="text-[10px] text-slate-400 uppercase tracking-wider">{currentUser.role}</span></div>
@@ -214,17 +224,17 @@ function AppContent() {
       <div className="glass-panel border-b border-white/20 shadow-sm z-20 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
-            <button onClick={() => navigate('/projects')} className="flex items-center gap-2 border-b-2 border-transparent py-4 px-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"><FolderKanban size={18} /> Projekte</button>
-            <button onClick={() => { goTo('dashboard'); setEditingCase(null); }} className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'dashboard' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Layout size={18} /> Dashboard</button>
-            <button onClick={() => { goTo('list'); setEditingCase(null); }} className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'list' || view === 'detail' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><FileText size={18} /> Testfälle</button>
-            <button onClick={() => { goTo('create'); setEditingCase(null); }} className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'create' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Plus size={18} /> {editingCase ? 'Bearbeiten' : 'Neu (KI)'}</button>
-            <button onClick={() => { goTo('import'); setEditingCase(null); }} className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'import' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Upload size={18} /> Import</button>
+            <button onClick={() => navigate('/projects')} title="Testprojekte und Projektkontext verwalten" className="flex items-center gap-2 border-b-2 border-transparent py-4 px-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"><FolderKanban size={18} /> Projekte</button>
+            <button onClick={() => { goTo('dashboard'); setEditingCase(null); }} title="Status, Qualität und Testfortschritt" className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'dashboard' ? 'border-[color:var(--color-action-primary)] text-[color:var(--color-action-primary)]' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Layout size={18} /> Übersicht</button>
+            <button onClick={() => { goTo('list'); setEditingCase(null); }} title="Testfälle planen, ausführen und verwalten" className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'list' || view === 'detail' ? 'border-[color:var(--color-action-primary)] text-[color:var(--color-action-primary)]' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><FileText size={18} /> Testfälle</button>
+            <button onClick={() => { goTo('create'); setEditingCase(null); }} title="Testfall mit KI-Unterstützung erstellen" className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'create' ? 'border-[color:var(--color-action-primary)] text-[color:var(--color-action-primary)]' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Plus size={18} /> {editingCase ? 'Bearbeiten' : 'Neuer Testfall'}</button>
+            <button onClick={() => { goTo('import'); setEditingCase(null); }} title="Testfälle per CSV oder Text importieren" className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${view === 'import' ? 'border-[color:var(--color-action-primary)] text-[color:var(--color-action-primary)]' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><Upload size={18} /> Import</button>
           </div>
         </div>
       </div>
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full print-container">
-        {isProjectsRoute ? <ProjectsPage /> : isProjectOverviewRoute ? <ProjectOverviewPage /> : isSourcesRoute ? <SourcesPage /> : isPlannedRoute ? <PlannedRoute title="Dieser Projektbereich ist vorgemerkt" /> : view === 'dashboard' && <Dashboard cases={cases} />}
+        {isDesignSystemRoute ? <DesignSystemPage currentUserRole={currentUser.role} /> : isProjectsRoute ? <ProjectsPage /> : isProjectOverviewRoute ? <ProjectOverviewPage /> : isSourcesRoute ? <SourcesPage /> : isPlannedRoute ? <PlannedRoute title="Dieser Projektbereich ist vorgemerkt" /> : view === 'dashboard' && <Dashboard cases={cases} />}
         {view === 'create' && <TestCaseGenerator onSave={handleSaveCase} onCancel={() => { goTo('dashboard'); setEditingCase(null); }} projectSettings={projectSettings} initialCase={editingCase} />}
         {view === 'list' && <CaseList cases={cases} onSelectCase={handleSelectCase} onUpdate={handleBulkUpdateCases} onDelete={handleBulkDeleteCases} onAddCases={handleSaveCase} users={users} projectSettings={projectSettings} />}
         {view === 'detail' && selectedCase && <CaseDetail testCase={selectedCase} onUpdate={handleUpdateCase} onBack={() => goTo('list')} onStartRunner={() => goTo('runner', selectedCase.caseId)} onDelete={handleDeleteCase} onDuplicate={handleDuplicateCase} onReset={handleResetCase} onUpgrade={handleOpenUpgradeAssistant} onAddCases={handleSaveCase} projectSettings={projectSettings} users={users} />}

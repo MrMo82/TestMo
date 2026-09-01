@@ -4,9 +4,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TestMo</title>
+    <title>Hays Test Hub | AI-supported test management</title>
+    <meta name="description" content="Hays-internal platform for structured test design, execution and quality evidence." />
+    <meta name="theme-color" content="#0A0532" />
+    <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
           darkMode: 'class',
@@ -17,6 +20,17 @@
                   850: '#1e293b',
                   900: '#0f172a',
                   950: '#020617',
+                },
+                // Hays Brand Tokens (Abschnitt BB) - zentral hier definiert, damit Komponenten
+                // z.B. "bg-hays-azure" statt eigener Hex-Werte verwenden koennen.
+                hays: {
+                  midnight: '#0A0532',
+                  azure: '#2173FF',
+                  teal: '#06D6A0',
+                  'deep-teal': '#0B7A75',
+                  orange: '#F7911E',
+                  lilac: '#CFB6FF',
+                  mint: '#A0F2E4',
                 }
               }
             }
@@ -24,8 +38,83 @@
         }
     </script>
     <style>
-      body { font-family: 'Inter', sans-serif; }
-      
+      /*
+        Sicherer Font-Stack (Abschnitt DD): keine offiziell freigegebene Hays-Webfont
+        im Repository vorhanden -> Arial, danach system-ui/sans-serif als Fallback.
+        Es werden bewusst KEINE externen Google-Font-Requests mehr geladen.
+      */
+      :root {
+        --font-family-base: Arial, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-family-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+        /* Semantische Tokens (Abschnitt CC) - Light Mode */
+        --color-background-page: #F8F9FC;
+        --color-background-surface: #FFFFFF;
+        --color-background-subtle: #EEF0F7;
+        --color-text-primary: #0A0532;
+        --color-text-secondary: #565B75;
+        --color-text-inverse: #FFFFFF;
+        --color-border-default: #D9DCE8;
+        --color-border-strong: #8A8FA3;
+        --color-action-primary: #2173FF;
+        --color-action-primary-hover: #1A5FE0;
+        --color-action-primary-active: #144DBB;
+        --color-action-secondary: #EEF0F7;
+        --color-focus: #2173FF;
+        --color-link: #2173FF;
+        --color-success: #0B7A75;
+        --color-warning: #F7911E;
+        --color-error: #D14343;
+        --color-info: #2173FF;
+        --color-draft: #8A8FA3;
+        --color-blocked: #F7911E;
+        --color-review-required: #F7911E;
+        --color-confirmed: #0B7A75;
+      }
+
+      .dark {
+        /* Semantische Tokens - Dark Mode: kein reines Schwarz, sondern Midnight-Blue-Basis */
+        --color-background-page: #14162A;
+        --color-background-surface: #0A0532;
+        --color-background-subtle: #2A2E45;
+        --color-text-primary: #FFFFFF;
+        --color-text-secondary: #D9DCE8;
+        --color-text-inverse: #0A0532;
+        --color-border-default: #2A2E45;
+        --color-border-strong: #565B75;
+        --color-action-primary: #5B9BFF;
+        --color-action-primary-hover: #4A8CF5;
+        --color-action-primary-active: #3576DE;
+        --color-action-secondary: #2A2E45;
+        --color-focus: #5B9BFF;
+        --color-link: #5B9BFF;
+        --color-success: #06D6A0;
+        --color-warning: #F7911E;
+        --color-error: #F08585;
+        --color-info: #5B9BFF;
+        --color-draft: #8A8FA3;
+        --color-blocked: #F7911E;
+        --color-review-required: #F7911E;
+        --color-confirmed: #06D6A0;
+      }
+
+      body { font-family: var(--font-family-base); }
+
+      /* Sichtbarer Tastaturfokus auf allen interaktiven Elementen (Abschnitt MM, AC-BRAND-09) */
+      a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
+      textarea:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible {
+        outline: 2px solid var(--color-focus);
+        outline-offset: 2px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+
       /* Glassmorphism Utilities */
       .glass-panel {
         background: rgba(255, 255, 255, 0.7);

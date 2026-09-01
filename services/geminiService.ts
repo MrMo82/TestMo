@@ -1,6 +1,8 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { TestCase, Priority, CaseStatus, StepStatus, TestStep, EvidenceAnalysis, ProjectSettings, CMPMeta } from "../types";
+import { TestCase, Priority, CaseStatus, StepStatus, TestStep, EvidenceAnalysis, ProjectSettings, CMPMeta, Readiness } from "../types";
+import { buildCompactAiContext } from "./contextProfileService";
+import { PRODUCT_NAME } from "../theme/brand";
 
 // Initialize the API client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -18,6 +20,15 @@ export interface DefectReport {
     severity: "Critical" | "Major" | "Minor" | "Trivial";
     environment?: string;
     category?: string;
+    // Hays-Kontextfelder (optional, nur befuellt wenn im Testfallkontext vorhanden - siehe Abschnitt S)
+    system?: string;
+    applicationFlow?: string;
+    daxtraDocketId?: string;
+    irisId?: string;
+    prospectId?: string;
+    psoId?: string;
+    correlationId?: string;
+    ownerDomain?: string;
 }
 
 export type ArtifactMode = 'auto' | 'testcase' | 'draft_backlog';
@@ -46,33 +57,32 @@ const hasSpecificationSignals = (context: string): boolean => {
 
 const SYSTEM_INSTRUCTION_BASE = `
 Du bist ein präziser Testfall-Ersteller und UX-bewusster Testassistent spezialisiert auf fachliche Tester (Business User) ohne technische Vorerfahrung.
-Du bist der Assistent von "TestMo", dem Testmanagement-Tool von MoFlowSystems bei Hays.
+Du bist der Assistent von "${PRODUCT_NAME}", der Testmanagement-Plattform von Hays.
 
 WICHTIGE SPRACHREGEL:
 - Sprich den Tester/Nutzer immer mit "Du" an.
 - Formuliere Testschritte IMMER im IMPERATIV (Befehlsform). 
   - Richtig: "Klicke auf Speichern", "Gib 'Max' ein", "Prüfe das Datum".
 
-HAYS SPECIFIC GUIDELINES & NAMING CONVENTIONS:
+ALLGEMEINE NAMING CONVENTIONS (projektneutral):
 1. TITEL FORMAT (Business Readable): "<Referenz-ID>: <Aussagekräftiger Titel in natürlicher Sprache>"
    - ZIELGRUPPE: Fachabteilung / Business Tester. Der Titel muss ohne technisches Wissen sofort verständlich sein.
    - VERBOTEN: Technische Kürzel, Snake_Case, CamelCase oder "Entwickler-Sprech".
    - GUT: "US-123: Bewerbung als neuer Kandidat einreichen"
-   - GUT: "CMP-001: Datenlöschung nach Ablauf der Frist prüfen"
    - SCHLECHT: "US-123: Functional_SubmitApplication_Flow"
-   - SCHLECHT: "CMP-001: Integration_Retention_Delete_E2E"
 
 2. SCHRITT LIMIT: Maximal 12 Schritte pro Testfall. Ein Szenario pro Testcase (Wartbarkeit/Retestbarkeit).
 3. RETEST REGEL: Wenn ein Schritt fehlschlägt, muss der gesamte Testcase neu getestet werden (kein Partial Retest).
 4. KONTEXT VERSTÄNDNIS: Wenn der Input ein Feature Request ist (Acceptance Criteria, Risks), leite daraus direkt die Prüfpunkte ab.
+5. KEINE ERFUNDENEN SYSTEME/FELDER/IDS/STATUSWERTE: Verwende ausschliesslich Systeme, Felder, IDs und Statuswerte aus dem mitgelieferten PROJEKT-/ORGANISATIONSKONTEXT. Ist dort ein konkreter organisationsspezifischer Begriff angegeben (z.B. ein bestätigtes Systemname), verwende genau diesen statt eines generischen Platzhalters (z.B. nicht "ATS", wenn ein konkretes Zielsystem benannt ist).
 
 Anforderungen an die Ausgabe:
 1. Erzeuge eine Kurzbeschreibung (1–2 Sätze).
 2. Erzeuge eine Vorbedingungsliste (z.B. "Du bist eingeloggt im UAT").
 3. Erzeuge Schritt-für-Schritt-Anweisungen (Max 12).
-4. TESTDATEN (WICHTIG): Generiere für JEDEN Schritt KONKRETE Testdaten (Schweizer Kontext: CHF, PLZ, Kantone).
-5. META-DATEN: Fülle das 'meta'-Objekt basierend auf dem Kontext.
-6. TAGS: Generiere Tags basierend auf den Meta-Daten (z.B. "Channel:Web", "Website:CH").
+4. TESTDATEN (WICHTIG): Generiere für JEDEN Schritt KONKRETE, aber synthetische Testdaten passend zum mitgelieferten Projektkontext (Land/Waehrung/Format nur uebernehmen, wenn im Kontext angegeben).
+5. META-DATEN: Fülle das optionale 'meta'-Objekt nur, wenn ein CMP-Kontextprofil aktiv ist.
+6. TAGS: Generiere Tags basierend auf den Meta-Daten, sofern vorhanden (z.B. "Channel:Web").
 7. Markiere mögliche Fehlerpfade.
 8. Gib pro Testcase 1–3 alternative/verzweigte Flows.
 9. Bewerte Aufwand (T-Shirt S/M/L) und Dauer.
@@ -189,11 +199,14 @@ const VARIANTS_SCHEMA: Schema = {
 const DEFECT_REPORT_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    title: { type: Type.STRING, description: "Kurzer, prägnanter Fehler-Titel für Jira" },
+    title: { type: Type.STRING, description: "Kurzer, prägnanter Fehler-Titel" },
     description: { type: Type.STRING, description: "Detaillierte Fehlerbeschreibung" },
     stepsToReproduce: { type: Type.STRING, description: "Nummerierte Liste der Schritte bis zum Fehler" },
     expectedVsActual: { type: Type.STRING, description: "Erwartetes vs. Tatsächliches Ergebnis" },
-    severity: { type: Type.STRING, enum: ["Critical", "Major", "Minor", "Trivial"] }
+    severity: { type: Type.STRING, enum: ["Critical", "Major", "Minor", "Trivial"] },
+    system: { type: Type.STRING, description: "Nur befuellen, wenn aus Hays-Testkontext ableitbar" },
+    applicationFlow: { type: Type.STRING, description: "Bewerbungsweg, nur wenn im Kontext vorhanden" },
+    ownerDomain: { type: Type.STRING, description: "Owner Domain, nur wenn im Kontext vorhanden" }
   },
   required: ["title", "description", "stepsToReproduce", "expectedVsActual", "severity"]
 };
@@ -277,25 +290,36 @@ const safeJsonParse = (text: string) => {
 
 // --- API FUNCTIONS ---
 
+export interface HaysGenerationContext {
+    contextProfileId?: string;
+    environment?: string;
+    selectedSystems?: string[];
+    selectedProcess?: string;
+    selectedFieldIds?: string[];
+}
+
 export const generateTestCaseFromAI = async (
   context: string, 
   userRole: string = "Case Manager", 
   priorityInput: string = "Medium",
   mediaInput?: MediaInput,
     projectSettings?: ProjectSettings,
-    qaOptions?: QAGovernanceOptions
+    qaOptions?: QAGovernanceOptions,
+    haysContext?: HaysGenerationContext
 ): Promise<TestCase> => {
   // Using explicit high retry config for reliability
   return runWithRetry(async () => {
     try {
-        const projectContext = projectSettings ? `
-        PROJEKT KONTEXT:
-        Projekt: ${projectSettings.projectName}
-        Beschreibung: ${projectSettings.description}
-        Systeme im Einsatz: ${projectSettings.systems}
-        URLs: ${projectSettings.urls}
-        Aktuelles Release: ${projectSettings.releaseVersion}
-        ` : "";
+        const projectContext = projectSettings ? buildCompactAiContext({
+            projectName: projectSettings.projectName,
+            description: projectSettings.description,
+            release: projectSettings.releaseVersion,
+            contextProfileId: haysContext?.contextProfileId ?? projectSettings.contextProfileId,
+            environment: haysContext?.environment,
+            selectedSystems: haysContext?.selectedSystems ?? projectSettings.selectedSystems,
+            selectedProcess: haysContext?.selectedProcess,
+            selectedFieldIds: haysContext?.selectedFieldIds,
+        }) : "";
 
                 const strictContract = qaOptions?.strictContract ?? projectSettings?.strictQAContract ?? true;
                 const artifactMode: ArtifactMode = qaOptions?.artifactMode ?? projectSettings?.artifactModeDefault ?? 'auto';
@@ -310,8 +334,10 @@ export const generateTestCaseFromAI = async (
                         : '';
 
         let textPrompt = `
-          Erstelle einen Testcase für CMP Schweiz (Projekt TestMo).
-          ${projectContext}
+          Erstelle einen Testcase fuer das unten beschriebene Projekt.
+
+          PROJEKT-/ORGANISATIONSKONTEXT (strukturiert, gefiltert - nur diese Begriffe/IDs/Systeme verwenden):
+          ${projectContext || 'Kein Projektkontext hinterlegt.'}
           
           Kontext/Anweisung: ${context}
           User Rolle: ${userRole}
@@ -320,13 +346,14 @@ export const generateTestCaseFromAI = async (
                     Governance Modus: ${artifactMode}
                     Draft erzwungen (Readiness): ${shouldForceDraft ? 'Ja' : 'Nein'}
           
-          Achte besonders auf realistische Testdaten im Feld 'testData' für jeden Schritt passend zu den Systemen (${projectSettings?.systems || 'Standard'}).
+          Achte besonders auf realistische, synthetische Testdaten im Feld 'testData' fuer jeden Schritt passend zum obigen Kontext.
           Wenn Input ein Feature Request ist, extrahiere Acceptance Criteria.
           
           WICHTIG: 
-          1. Analysiere den Kontext und fülle das 'meta'-Objekt mit den passenden Werten aus der Taxonomie (z.B. CHANNEL, WEBSITE, ENTITY_TYPE).
+          1. Analysiere den Kontext und fülle das 'meta'-Objekt nur, wenn ein CMP-Kontextprofil erkennbar aktiv ist.
           2. Generiere einen lesbaren Titel für Fachanwender: "<ID>: <Natürlicher Satz>". KEIN Snake_Case!
-                    3. Nutze nur Inhalte, die aus Kontext/Quelle ableitbar sind. Keine erfundenen Soll-Reaktionen.
+                    3. Nutze nur Inhalte, die aus Kontext/Quelle ableitbar sind. Keine erfundenen Systeme, Felder, IDs oder Soll-Reaktionen.
+                    4. Wenn der Projektkontext ein konkretes Zielsystem, Zielfeld oder eine Routingregel nennt, verwende exakt diese Bezeichnung statt eines generischen Platzhalters.
         `;
 
                 if (governanceBlock) {
@@ -563,7 +590,7 @@ export const generateVariantsFromCase = async (currentCase: TestCase, projectSet
     }, 5, 4000);
 };
 
-export const parseCSVToTestCases = async (csvContent: string): Promise<TestCase[]> => {
+export const parseCSVToTestCases = async (csvContent: string, contextProfileId?: string): Promise<TestCase[]> => {
   try {
     // 1. Clean and split input
     const lines = csvContent.split('\n').filter(line => line.trim().length > 0);
@@ -593,13 +620,16 @@ export const parseCSVToTestCases = async (csvContent: string): Promise<TestCase[
 
         const prompt = `
           Du bekommst eine Liste von CSV-Zeilen. Konvertiere sie in validierte JSON Testfälle.
-          Die erste Zeile ist der Header (enthält ggf. CMP Taxonomie Felder wie CHANNEL, ENTITY_TYPE, PSO_FLOW etc.).
+          Die erste Zeile ist der Header (enthält ggf. Meta-/Taxonomie-Felder wie CHANNEL, ENTITY_TYPE, PSO_FLOW etc., falls ein CMP-Kontextprofil aktiv ist).
           
           Regeln:
-          1. Wenn Felder fehlen, improvisiere sinnvoll basierend auf dem Titel.
-          2. WICHTIG: Mappe die CSV Spalten auf das 'meta' Objekt gemäß der Taxonomie.
-          3. Füge alle Meta-Werte zusätzlich als TAGS hinzu (z.B. "Channel:Web").
+          1. Wenn notwendige Felder oder Sollwerte fehlen, erfinde keine Informationen. Erzeuge stattdessen einen Draft-Testfall.
+             Nenne im Feld 'summary' oder in einem Schritt-'notes'-Feld: den fehlenden Input, die betroffenen Felder, den empfohlenen Owner
+             und das erforderliche Abnahmekriterium. Füge in diesem Fall den Tag "IncompleteInput" hinzu.
+          2. WICHTIG: Mappe die CSV Spalten auf das optionale 'meta' Objekt nur, wenn die Spalten der CMP-Taxonomie entsprechen.
+          3. Füge etwaige Meta-Werte zusätzlich als TAGS hinzu (z.B. "Channel:Web").
           4. TITEL BEREINIGUNG: Falls der CSV-Titel technisch ist (z.B. "Functional_Test_01"), schreibe ihn in einen lesbaren Satz um.
+          5. Erfinde keine Systeme, IDs, Statuswerte oder Logtexte, die nicht in den CSV-Daten enthalten sind.
           
           CSV Content:
           ${batchContent}
@@ -611,7 +641,7 @@ export const parseCSVToTestCases = async (csvContent: string): Promise<TestCase[
                   model: 'gemini-2.5-flash',
                   contents: prompt,
                   config: {
-                    systemInstruction: "Du bist ein Datenverarbeitungs-Assistent. Verwandle CSV in unser TestCase JSON Format mit Meta-Daten und lesbaren Titeln.",
+                    systemInstruction: "Du bist ein Datenverarbeitungs-Assistent. Verwandle CSV in unser TestCase JSON Format mit lesbaren Titeln. Erfinde niemals fehlende Informationen; markiere unvollstaendige Zeilen als Draft.",
                     responseMimeType: "application/json",
                     responseSchema: BULK_IMPORT_SCHEMA,
                     temperature: 0.1,
@@ -637,17 +667,22 @@ export const parseCSVToTestCases = async (csvContent: string): Promise<TestCase[
         throw new Error("Konnte keine Testfälle generieren. Bitte prüfe das Format.");
     }
 
-    return allCases.map((c: any) => ({
-      ...c,
-      caseStatus: CaseStatus.NotStarted,
-      lastUpdated: new Date().toISOString(),
-      createdBy: "BulkImport",
-      steps: c.steps.map((s: any) => ({
-        ...s,
-        status: StepStatus.NotStarted,
-        testData: s.testData || ""
-      }))
-    }));
+    return allCases.map((c: any) => {
+      const isIncomplete = (c.tags || []).includes('IncompleteInput');
+      return {
+        ...c,
+        contextProfileId,
+        caseStatus: isIncomplete ? CaseStatus.Draft : CaseStatus.NotStarted,
+        readiness: isIncomplete ? Readiness.Draft : undefined,
+        lastUpdated: new Date().toISOString(),
+        createdBy: "BulkImport",
+        steps: c.steps.map((s: any) => ({
+          ...s,
+          status: StepStatus.NotStarted,
+          testData: s.testData || ""
+        }))
+      };
+    });
 
   } catch (error) {
     console.error("Error parsing CSV:", error);
@@ -658,20 +693,27 @@ export const parseCSVToTestCases = async (csvContent: string): Promise<TestCase[
 export const generateDefectReport = async (testCase: TestCase, failedStep: TestStep): Promise<DefectReport> => {
     return runWithRetry(async () => {
         try {
+            const haysContext = testCase.haysContext;
             const prompt = `
-            Ein Testschritt ist fehlgeschlagen. Erstelle einen Bug-Report für Jira.
+            Ein Testschritt ist fehlgeschlagen. Erstelle einen Bug-Report.
             Testfall: ${testCase.title}
             Failed Step: ${failedStep.description}
             Expected: ${failedStep.expectedResult}
             Notes: ${failedStep.notes || "N/A"}
             Environment info (Meta): ${JSON.stringify(testCase.meta || {})}
+            Hays-Testkontext (nur uebernehmen, nicht erfinden): ${JSON.stringify(haysContext || {})}
+            Evidence-Vorgaben: ${(testCase.evidenceRequirements || []).join(', ') || 'keine hinterlegt'}
+
+            WICHTIG: Fuelle system/applicationFlow/ownerDomain nur, wenn sie aus dem Hays-Testkontext ableitbar sind.
+            Erfinde keine Daxtra Docket-ID, IRIS-ID/BPID, Prospect-ID, PSO-ID oder Correlation-ID; lasse diese Felder leer,
+            wenn sie nicht im Testfall/Evidence dokumentiert sind.
             `;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: {
-                    systemInstruction: "Du bist ein QA Lead. Schreibe präzise Bug Reports auf Deutsch. Nutze Hays Kategorien wenn möglich.",
+                    systemInstruction: "Du bist ein QA Lead. Schreibe praezise, faktenbasierte Bug Reports auf Deutsch. Erfinde keine IDs oder Statuswerte.",
                     responseMimeType: "application/json",
                     responseSchema: DEFECT_REPORT_SCHEMA,
                     temperature: 0.4
