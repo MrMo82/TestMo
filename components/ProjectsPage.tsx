@@ -191,7 +191,7 @@ const ProjectsPage: React.FC = () => {
           <h3 className="md:col-span-2 text-xs font-bold uppercase tracking-wider text-slate-400">Projektstammdaten</h3>
           <div>
             <label htmlFor="project-key" className="mb-1 block text-sm font-medium">Projekt-Key</label>
-            <input id="project-key" required pattern="[A-Z][A-Z0-9_-]{1,31}" value={form.projectKey} onChange={event => updateField('projectKey', event.target.value)} className="w-full rounded-lg border border-slate-300 p-2 dark:border-slate-600 dark:bg-slate-800" placeholder="ITR" />
+            <input id="project-key" required pattern="[A-Z][A-Z0-9_\-]{1,31}" value={form.projectKey} onChange={event => updateField('projectKey', event.target.value)} className="w-full rounded-lg border border-slate-300 p-2 dark:border-slate-600 dark:bg-slate-800" placeholder="ITR" />
           </div>
           <div>
             <label htmlFor="project-name" className="mb-1 block text-sm font-medium">Projektname</label>

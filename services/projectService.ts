@@ -75,6 +75,9 @@ export const listProjects = async (): Promise<Project[]> => {
 };
 
 export const createProject = async (input: CreateProjectInput): Promise<Project> => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error('Für das Anlegen eines Projekts ist eine gültige Sitzung erforderlich.');
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
@@ -84,6 +87,7 @@ export const createProject = async (input: CreateProjectInput): Promise<Project>
       goal: input.goal,
       test_object: input.testObject,
       release: input.release,
+      owner_id: userData.user.id,
     })
     .select(projectColumns)
     .single();
