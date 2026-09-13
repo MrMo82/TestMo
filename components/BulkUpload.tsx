@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { parseCSVToTestCases, refineTestCase } from '../services/geminiService';
-import { TestCase, ProjectSettings } from '../types';
-import { Upload, FileText, Check, AlertTriangle, Loader2, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { checkTestCasesTerminology, hasBlockingFindings } from '../services/terminologyService';
+import { TestCase, ProjectSettings, TerminologyFinding } from '../types';
+import { Upload, FileText, Check, AlertTriangle, Loader2, FileSpreadsheet, Sparkles, ShieldAlert } from 'lucide-react';
 
 interface BulkUploadProps {
   onImport: (cases: TestCase[]) => void;
@@ -16,6 +17,8 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
   const [parsedCases, setParsedCases] = useState<TestCase[]>([]);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [findingsByCaseId, setFindingsByCaseId] = useState<Map<string, TerminologyFinding[]>>(new Map());
+  const [isCheckingTerminology, setIsCheckingTerminology] = useState(false);
   
   // Track which rows are currently being refined by AI
   const [refiningIndices, setRefiningIndices] = useState<Set<number>>(new Set());
@@ -41,12 +44,25 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
     setParsedCases([]);
     
     try {
-      const result = await parseCSVToTestCases(csvContent);
+      const result = await parseCSVToTestCases(csvContent, projectSettings?.contextProfileId);
       setParsedCases(result);
+      if (projectSettings?.contextProfileId) {
+        setFindingsByCaseId(checkTestCasesTerminology(result, { contextProfileId: projectSettings.contextProfileId }));
+      }
     } catch (err) {
       setError('Fehler beim Analysieren der Daten. Bitte prüfe dein Format.');
     } finally {
       setIsParsing(false);
+    }
+  };
+
+  const handleBulkTerminologyCheck = () => {
+    if (!projectSettings?.contextProfileId) return;
+    setIsCheckingTerminology(true);
+    try {
+      setFindingsByCaseId(checkTestCasesTerminology(parsedCases, { contextProfileId: projectSettings.contextProfileId }));
+    } finally {
+      setIsCheckingTerminology(false);
     }
   };
 
@@ -140,9 +156,17 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
           </div>
         ) : (
           <div className="space-y-6">
-             <div className="bg-green-50 text-green-800 p-4 rounded-lg flex items-center gap-2">
-                <Check size={20} />
-                <span className="font-medium">{parsedCases.length} Testfälle erfolgreich erkannt. Überprüfe und optimiere sie jetzt.</span>
+             <div className="bg-green-50 text-green-800 p-4 rounded-lg flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 font-medium"><Check size={20} /> {parsedCases.length} Testfälle erfolgreich erkannt. Überprüfe und optimiere sie jetzt.</span>
+                {projectSettings?.contextProfileId && (
+                  <button
+                    onClick={handleBulkTerminologyCheck}
+                    disabled={isCheckingTerminology}
+                    className="flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                  >
+                    {isCheckingTerminology ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} />} Terminologie prüfen (Bulk)
+                  </button>
+                )}
              </div>
 
              <div className="max-h-96 overflow-y-auto border border-slate-200 rounded-lg">
@@ -153,11 +177,15 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
                             <th className="p-3 border-b">Titel</th>
                             <th className="p-3 border-b text-center">Schritte</th>
                             <th className="p-3 border-b text-center">Prio</th>
+                            <th className="p-3 border-b text-center">Terminologie</th>
                             <th className="p-3 border-b text-right">Aktionen (KI-Opt)</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                        {parsedCases.map((c, i) => (
+                        {parsedCases.map((c, i) => {
+                          const findings = findingsByCaseId.get(c.caseId) || [];
+                          const hasErrors = hasBlockingFindings(findings);
+                          return (
                             <tr key={i} className="hover:bg-slate-50">
                                 <td className="p-3 font-mono text-xs text-slate-500 align-middle">{c.caseId}</td>
                                 <td className="p-3 font-medium text-slate-800 align-middle">
@@ -174,6 +202,15 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
                                         {c.priority}
                                     </span>
                                 </td>
+                                <td className="p-3 text-center align-middle" title={findings.map(f => f.message).join('\n')}>
+                                    {findings.length === 0 ? (
+                                        <span className="text-xs text-slate-400">-</span>
+                                    ) : (
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium border ${hasErrors ? 'bg-red-50 border-red-200 text-red-600' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                            {findings.length} Finding{findings.length > 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                </td>
                                 <td className="p-3 text-right align-middle">
                                     <button 
                                         onClick={() => handleRefineRow(i)}
@@ -189,7 +226,8 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onImport, onCancel, projectSett
                                     </button>
                                 </td>
                             </tr>
-                        ))}
+                          );
+                        })}
                     </tbody>
                 </table>
              </div>

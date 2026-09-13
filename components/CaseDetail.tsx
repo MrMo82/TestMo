@@ -7,6 +7,7 @@ import DefectModal from './DefectModal';
 import FailureDialog from './FailureDialog';
 import { ArrowLeft, Clock, Save, Play, CheckCircle, XCircle, Ban, AlertCircle, ChevronDown, ChevronUp, Database, StickyNote, Timer, Bug, Image as ImageIcon, Printer, RotateCcw, Copy, Trash2, Mic, AlertTriangle, Sparkles, Loader2, Bot, GitBranch, UserPlus } from 'lucide-react';
 import { storageService } from '../services/storageService';
+import TestDataStudio from './TestDataStudio';
 
 interface CaseDetailProps {
   testCase: TestCase;
@@ -29,6 +30,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
   const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
   const [isGeneratingDefect, setIsGeneratingDefect] = useState(false);
   const [currentDefect, setCurrentDefect] = useState<DefectReport | null>(null);
+    const [defectStep, setDefectStep] = useState<TestStep | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingVariants, setIsGeneratingVariants] = useState(false);
   const [isListening, setIsListening] = useState<string | null>(null);
@@ -39,6 +41,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isTestDataStudioOpen, setIsTestDataStudioOpen] = useState(false);
 
   useEffect(() => { 
       setCurrentCase(testCase); 
@@ -113,6 +116,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
   };
 
   const handleCreateDefect = async (step: TestStep) => {
+      setDefectStep(step);
       setIsDefectModalOpen(true);
       setIsGeneratingDefect(true);
       setCurrentDefect(null);
@@ -190,6 +194,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
            )}
            <button onClick={handleRefineCase} disabled={isRefining} className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${isRefining ? 'bg-purple-50 text-purple-600' : 'text-slate-500 hover:bg-purple-50 hover:text-purple-600 dark:text-slate-400'}`} title="Testfall optimieren (KI)"><Sparkles size={18} /></button>
            {onAddCases && (<button onClick={handleGenerateVariants} disabled={isGeneratingVariants} className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${isGeneratingVariants ? 'bg-amber-50 text-amber-600' : 'text-slate-500 hover:bg-amber-50 hover:text-amber-600 dark:text-slate-400'}`} title="KI-Varianten generieren (Negativfälle)"><GitBranch size={18} /></button>)}
+           <button onClick={() => setIsTestDataStudioOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold flex items-center gap-2" title="Synthetische Testdaten erzeugen"><Database size={16} /> <span>Testdaten erzeugen</span></button>
            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
            {onReset && <button onClick={() => onReset(currentCase)} className="p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg" title="Testfall zurücksetzen (Reset)"><RotateCcw size={18} /></button>}
            {onDuplicate && <button onClick={() => onDuplicate(currentCase)} className="p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg" title="Duplizieren"><Copy size={18} /></button>}
@@ -326,7 +331,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
             ))}
         </div>
       </div>
-      <DefectModal isOpen={isDefectModalOpen} onClose={() => setIsDefectModalOpen(false)} defectData={currentDefect} isLoading={isGeneratingDefect} />
+    <DefectModal isOpen={isDefectModalOpen} onClose={() => setIsDefectModalOpen(false)} defectData={currentDefect} isLoading={isGeneratingDefect} defectContext={{ testCase: currentCase, failedStep: defectStep || undefined, evidence: defectStep?.evidence }} />
       
       {/* Interception Dialog */}
       <FailureDialog 
@@ -335,6 +340,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
         onClose={() => setFailureDialogState({ ...failureDialogState, isOpen: false })}
         onConfirm={confirmFailureDialog}
       />
+    {isTestDataStudioOpen && <TestDataStudio testCase={currentCase} projectSettings={projectSettings} onClose={() => setIsTestDataStudioOpen(false)} />}
     </div>
   );
 };

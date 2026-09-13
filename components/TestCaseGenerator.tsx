@@ -1,8 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { generateTestCaseFromAI, MediaInput, ArtifactMode } from '../services/geminiService';
-import { TestCase, Priority, NegativeFlow, StepStatus, CaseStatus, ProjectSettings } from '../types';
-import { Sparkles, Loader2, Save, X, Database, Image as ImageIcon, Trash2, FileText, Upload, GitBranch, Plus, Check, Settings, Archive, RefreshCw, Sliders } from 'lucide-react';
+import { generateTestCaseFromAI, MediaInput, ArtifactMode, HaysGenerationContext } from '../services/geminiService';
+import { TestCase, Priority, NegativeFlow, StepStatus, CaseStatus, ProjectSettings, HaysTestContext } from '../types';
+import { Sparkles, Loader2, Save, X, Database, Image as ImageIcon, Trash2, FileText, Upload, GitBranch, Plus, Check, Settings, Archive, RefreshCw, Sliders, ShieldCheck } from 'lucide-react';
+import { getContextProfile, listControlledValueSets } from '../services/contextProfileService';
+import { HAYS_CONTEXT_PROFILE_ID } from '../data/hays/contextProfile';
 
 interface TestCaseGeneratorProps {
   onSave: (testCases: TestCase | TestCase[]) => void;
@@ -80,6 +82,21 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
     const [artifactMode, setArtifactMode] = useState<ArtifactMode>(projectSettings?.artifactModeDefault || 'auto');
     const [strictContract, setStrictContract] = useState<boolean>(projectSettings?.strictQAContract ?? true);
     const [customInstruction, setCustomInstruction] = useState<string>(projectSettings?.qaInstruction || '');
+
+    // Hays-Kontextauswahl (nur relevant, wenn Projekt ein Hays-Kontextprofil aktiv hat)
+    const isHaysProfile = projectSettings?.contextProfileId === HAYS_CONTEXT_PROFILE_ID;
+    const haysProfile = getContextProfile(projectSettings?.contextProfileId);
+    const [haysContext, setHaysContext] = useState<HaysTestContext>({});
+    const updateHaysField = <K extends keyof HaysTestContext>(field: K, value: HaysTestContext[K]) => {
+        setHaysContext(prev => ({ ...prev, [field]: value }));
+    };
+    const toggleHaysMulti = (field: keyof HaysTestContext, value: string) => {
+        setHaysContext(prev => {
+            const current = (prev[field] as string[] | undefined) || [];
+            const next = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
+            return { ...prev, [field]: next };
+        });
+    };
 
     useEffect(() => {
             setArtifactMode(projectSettings?.artifactModeDefault || 'auto');
@@ -179,7 +196,13 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
                             artifactMode,
                             strictContract,
                             customContract: customInstruction
-                        }
+                        },
+                        isHaysProfile ? ({
+                            contextProfileId: projectSettings?.contextProfileId,
+                            environment: haysContext.environment,
+                            selectedSystems: haysContext.system,
+                            selectedProcess: haysContext.applicationFlow,
+                        } as HaysGenerationContext) : undefined
         );
 
         // If in upgrade mode, preserve the original ID and metadata
@@ -189,10 +212,18 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
                 caseId: initialCase.caseId, // KEEP ORIGINAL ID
                 caseStatus: initialCase.caseStatus, // KEEP STATUS
                 createdBy: initialCase.createdBy,
-                lastUpdated: new Date().toISOString()
+                lastUpdated: new Date().toISOString(),
+                haysContext: isHaysProfile ? haysContext : undefined,
+                contextProfileId: projectSettings?.contextProfileId,
+                dataDictionaryVersion: projectSettings?.dataDictionaryVersion,
             });
         } else {
-            setGeneratedCase(result);
+            setGeneratedCase({
+                ...result,
+                haysContext: isHaysProfile ? haysContext : undefined,
+                contextProfileId: projectSettings?.contextProfileId,
+                dataDictionaryVersion: projectSettings?.dataDictionaryVersion,
+            });
         }
 
     } catch (err) {
@@ -522,6 +553,82 @@ const TestCaseGenerator: React.FC<TestCaseGeneratorProps> = ({ onSave, onCancel,
                 </div>
             </div>
           </div>
+
+          {/* Hays Testkontext (nur sichtbar bei aktivem Hays-Kontextprofil) */}
+          {isHaysProfile && haysProfile && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+              <div className="p-4 flex items-center gap-2 text-slate-700 font-bold border-b border-slate-200 bg-white">
+                <ShieldCheck size={18} className="text-blue-600" /> Hays Testkontext
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Testkontext</h4>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Environment</label>
+                  <select className="w-full p-2 border border-slate-200 rounded text-sm mb-2" value={haysContext.environment || ''} onChange={e => updateHaysField('environment', e.target.value)}>
+                    <option value="">-- wählen --</option>
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'ENVIRONMENT')?.values || []).map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Bewerbungsweg</label>
+                  <select className="w-full p-2 border border-slate-200 rounded text-sm mb-2" value={haysContext.applicationFlow || ''} onChange={e => updateHaysField('applicationFlow', e.target.value)}>
+                    <option value="">-- wählen --</option>
+                    {haysProfile.processes.map(p => <option key={p.key} value={p.key}>{p.label}{p.confirmationStatus === 'Review Required' ? ' (Review Required)' : ''}</option>)}
+                  </select>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Testtyp</label>
+                  <div className="flex flex-wrap gap-1">
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'TEST_TYPE')?.values || []).map(v => (
+                      <button type="button" key={v} onClick={() => toggleHaysMulti('testType', v)} className={`text-xs px-2 py-1 rounded border ${(haysContext.testType || []).includes(v) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hays Systeme</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {haysProfile.systems.map(s => (
+                      <button type="button" key={s.key} onClick={() => toggleHaysMulti('system', s.label)} className={`text-xs px-2 py-1 rounded border ${(haysContext.system || []).includes(s.label) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{s.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Erwarteter fachlicher Ausgang</h4>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Erwarteter Daxtra-Status <span className="text-amber-500">(Confirmed)</span></label>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'DAXTRA_STATUS')?.values || []).map(v => (
+                      <button type="button" key={v} onClick={() => toggleHaysMulti('expectedDaxtraStatus', v)} className={`text-xs px-2 py-1 rounded border ${(haysContext.expectedDaxtraStatus || []).includes(v) ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{v}</button>
+                    ))}
+                  </div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">IRIS-Prüffelder</label>
+                  <div className="flex flex-wrap gap-1 mb-2 max-h-24 overflow-y-auto">
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'IRIS_FIELD')?.values || []).map(v => (
+                      <button type="button" key={v} onClick={() => toggleHaysMulti('irisFields', v)} className={`text-xs px-2 py-1 rounded border ${(haysContext.irisFields || []).includes(v) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{v}</button>
+                    ))}
+                  </div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Erwartetes IRIS-Ergebnis</label>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'IRIS_OUTCOME')?.values || []).map(v => (
+                      <button type="button" key={v} onClick={() => toggleHaysMulti('expectedIrisOutcome', v)} className={`text-xs px-2 py-1 rounded border ${(haysContext.expectedIrisOutcome || []).includes(v) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{v}</button>
+                    ))}
+                  </div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Matching-Ergebnis</label>
+                  <select className="w-full p-2 border border-slate-200 rounded text-sm" value={haysContext.matchingResult || ''} onChange={e => updateHaysField('matchingResult', e.target.value)}>
+                    <option value="">-- wählen --</option>
+                    {(listControlledValueSets(HAYS_CONTEXT_PROFILE_ID).find(s => s.key === 'MATCHING_RESULT')?.values || []).map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Evidence</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {(haysProfile.evidenceTypes || []).map(v => (
+                      <button type="button" key={v} onClick={() => toggleHaysMulti('documentRole', v)} className={`text-xs px-2 py-1 rounded border bg-white border-slate-200 text-slate-600`}>{v}</button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">Hinweis: Review-Required-Werte sind orange markiert und gelten nicht als final bestätigt.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* CMP Matrix Selector */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
