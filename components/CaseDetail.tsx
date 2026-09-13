@@ -30,6 +30,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
   const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
   const [isGeneratingDefect, setIsGeneratingDefect] = useState(false);
   const [currentDefect, setCurrentDefect] = useState<DefectReport | null>(null);
+    const [defectStep, setDefectStep] = useState<TestStep | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingVariants, setIsGeneratingVariants] = useState(false);
   const [isListening, setIsListening] = useState<string | null>(null);
@@ -115,6 +116,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
   };
 
   const handleCreateDefect = async (step: TestStep) => {
+      setDefectStep(step);
       setIsDefectModalOpen(true);
       setIsGeneratingDefect(true);
       setCurrentDefect(null);
@@ -329,7 +331,7 @@ const CaseDetail: React.FC<CaseDetailProps> = ({ testCase, onUpdate, onBack, onS
             ))}
         </div>
       </div>
-      <DefectModal isOpen={isDefectModalOpen} onClose={() => setIsDefectModalOpen(false)} defectData={currentDefect} isLoading={isGeneratingDefect} />
+    <DefectModal isOpen={isDefectModalOpen} onClose={() => setIsDefectModalOpen(false)} defectData={currentDefect} isLoading={isGeneratingDefect} defectContext={{ testCase: currentCase, failedStep: defectStep || undefined, evidence: defectStep?.evidence }} />
       
       {/* Interception Dialog */}
       <FailureDialog 

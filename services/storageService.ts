@@ -1,10 +1,11 @@
 
-import { TestCase, User, ProjectSettings, ActivityLog } from '../types';
+import { TestCase, User, ProjectSettings, ActivityLog, DefectTicket } from '../types';
 
 const STORAGE_KEY_CASES = 'testmo_cases_v1';
 const STORAGE_KEY_USERS_DB = 'testmo_users_db';
 const STORAGE_KEY_SETTINGS = 'testmo_project_settings';
 const STORAGE_KEY_ACTIVITY = 'testmo_activity_log';
+const STORAGE_KEY_DEFECTS = 'testmo_defect_tickets_v1';
 
 export const storageService = {
   // --- AUTHENTICATION & USER MANAGEMENT ---
@@ -75,6 +76,24 @@ export const storageService = {
   loadProjectSettings: (): ProjectSettings | null => {
     const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
     return stored ? JSON.parse(stored) : null;
+  },
+
+  saveDefect: (ticket: DefectTicket) => {
+    const tickets = storageService.loadDefects();
+    const existingIndex = tickets.findIndex(existing => existing.id === ticket.id);
+    if (existingIndex >= 0) tickets[existingIndex] = ticket;
+    else tickets.unshift(ticket);
+    localStorage.setItem(STORAGE_KEY_DEFECTS, JSON.stringify(tickets));
+  },
+
+  loadDefects: (): DefectTicket[] => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_DEFECTS);
+      return stored ? JSON.parse(stored) as DefectTicket[] : [];
+    } catch (e) {
+      console.error('Error loading defects', e);
+      return [];
+    }
   },
 
   // --- ACTIVITY LOG ---

@@ -356,6 +356,31 @@ export interface TestCase {
   terminologyFindings?: TerminologyFinding[];
 }
 
+export type DefectSeverity = 'Critical' | 'Major' | 'Minor' | 'Trivial';
+export type DefectStatus = 'draft' | 'reported';
+
+export interface DefectTicket {
+  id: string;
+  title: string;
+  description: string;
+  stepsToReproduce: string;
+  expectedVsActual: string;
+  severity: DefectSeverity;
+  environment?: string;
+  category?: string;
+  status: DefectStatus;
+  projectId?: string;
+  testCaseId?: string;
+  testCaseTitle?: string;
+  failedStepId?: string;
+  failedStepDescription?: string;
+  evidence?: string;
+  createdAt: string;
+  updatedAt: string;
+  source: 'test-case' | 'general';
+  [key: string]: unknown;
+}
+
 export interface DashboardStats {
   total: number;
   passed: number;
